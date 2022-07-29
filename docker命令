@@ -1,0 +1,225 @@
+docker info 
+启动  互动式
+docker run -i -t ubuntu /bin/bash
+
+
+启动 起名字 
+docker run --name bob_the_container -i -t ubuntu /bin/bash 
+
+重启 
+docker  start bob_the_container 
+
+附着到容器上 
+ docker  attach bob_the_container 
+ 
+ 创建守护式容器
+ 
+ docker run --name daemon_dave -d ubuntu  /bin/sh -c "while  true; do echo hello world; sleep 1; done"
+ 
+ 查看日志
+ docker logs daemon_dave 
+ 
+ docker logs -f daemon_dave 
+ 
+ docker logs -ft daemon_dave 
+ 
+ 查看容器内进程
+ docker top daemon_dave  
+ 
+ 在容器内运行进程 1.3
+ docker exec -d daemon_dave touch /etc/new_config_file 
+ docker exec -t -t daemon_dave /bin/bash 
+ 
+ 停止守护式容器
+ docker stop daemon_dave 
+ docker stop c2c4e57c12c4 
+ 
+ 自动重启容器 1.2 
+ docker run --restart=always --name daemon_dave -d ubuntu /bin/sh -c "while true; do echo hello world; sleep 1; done"
+ 
+ --restart=on-failure:5
+ 
+ 获取容器信息
+ docker ps 
+ docker inspect daemon_dave 
+ docker inspect --format='{{ .State.Running}}' daemon_dave 
+ docker inspect --format '{{ .NetworkSettings.IPAddress}}' daemon_dave 
+ docker inspect --format '{{ .Name}} {{.State.Running}}'
+ 
+ 
+ 删除容器
+ docker rm 80430f8d0921
+ docker rm `docker ps -a -q`
+ 
+ 镜像 
+ 拉 
+ docker pull ubuntu
+ 
+ 标签  tag   
+ docker run -i -t --name new_container ubuntu:12.04 /bin/bash
+ 未指定 默认 latest
+ docker run -t -i --name next_container ubuntu /bin/bash
+ 
+ docker pull fedora 
+ 
+ 查找镜像
+ docker search puppet 
+ 
+ 构建镜像
+ docker commit  镜像id  jamtur01/apache2 
+ 
+ docker build 和 Dockerfile 文件
+ ----
+ mkdir static_web
+ cd static_web
+ touch Dockerfile 
+ 
+#Version: 0.0.1
+FROM ubuntu:14.04
+MAINTAINER James Turnbull "james@example.com"
+RUN apt-get update
+RUN apt-get install -y nginx
+RUN echo 'Hi, I am in your container' > /usr/share/nginx/html/index.html
+EXPOSE 80 
+
+ps: exec 格式的RUN指令 
+RUN {"apt-get", " install", '-y', "nginx"}
+
+基于Dockerfile 构建新镜像 镜像名：标签
+docker build -t="test/static_web" .
+docker build -t="test/static_web:v1" .
+
+指定一个Git仓库的原地址来指定Dockerfile 的位置
+docker build -t="test/static_web:v1" git@github.com:test/docker-static_web 
+
+构建取消缓存
+docker build --no-cache -t="test/static_web"
+
+基于构建缓存的Dockerfile模板  ENV 设置环境变量 
+FROM ubuntu:14.04
+MAINTAINER James Turnbull "james@example.com"
+ENV REFRESHED_AT 2014-07-01
+RUN apt-get -qq update 
+
+查看镜像
+docker images 
+查看历史
+docker history 
+
+从新镜像启动容器
+docker run -d -p 80 --name static_web  test/static_web  nginx -g "daemon off;"
+ps: -d  以分离(detached)的方式在后台运行。 
+	-g  在容器中运行
+	-p 控制Docker在运行时应该公开哪些网络端口给外部(宿主机)
+	Docker 在宿主机上随机选一个 49153-65535 的一个比较大的端口来映射到容器中的80端口
+
+查看容器的端口映射情况
+docker port 6751b94bb5c0 80
+
+将容器内的端口绑定到不同的宿主机端口上
+docker run -d -p 8080:80 --name static_web  test/static_web nginx -g "daemon off;"
+
+将端口绑定限制在特定的网络接口（IP地址）上
+docker run -d -p 127.0.0.1:80:80 --name static_web test/static_web nginx -g "daemon off;"
+
+将容器内的80端口绑定到本地宿主机的127.0.0.1 的80端口绑定到随机端口上
+docker run -d -p 127.0.0.1::80 --name static_web test/static_web nginx -g "daemon off;"
+
+ps: -P 对外公开在Dockerfile 中的EXPOSE指令中设置的所有端口。
+
+Dockerfile 指令 http://docs.docker.com/reference/builder 
+1.CMD 指定一个容器启动时要运行的命令; RUN指定镜像被构建时要运行的命令
+CMD ["/bin/bash", "-1"]
+ps: docker run 可以覆盖CMD ，Dockerfile 只能指定一条CMD 指令，多条也只有最后一条好使， 多条使Supervisor
+2. ENTRYPOINT 不会被 docker run 覆盖
+3.WORKDIR  从镜像创建一个新容器时，在容器内部设置一个工作目录， ENTRYPOINT和CMD指定的程序会在这个目录下执行。
+WORKDIR /opt/webapp/db
+RUN bundle install 
+WORKDIR /opt/webapp
+ENTRYPOINT [ "rackup" ]
+4.ENV 设置环境变量 
+ENV  RVM_PATH /home/rvm/
+Run gen install unicorn
+RVM_PATH=/home/rvm/ gem install unicorn 
+ENV TRAGET_DIR /opt/app
+WORKDIR $TARGET_DIR
+ps: docker run  -e   传递环境变量
+docker run -it -e "WEB_PORT=8080" ubuntu env 
+5.USER 指定该镜像会以什么样的用户去运行
+USER nginx 
+基于该镜像启动的容器会以nginx用户的身份来运行。 指定用户名或UID以及组或GID
+USER user
+USER user:group
+USER uid
+USER uid:gid
+USER user:gid
+USER uid:group 
+docker run -u  覆盖指令指定的值
+6.VOLUME 向基于镜像创建的容器添加卷。
+卷可以在容器间共享和重用
+一个容器可以不是必须和其他容器共享卷
+对卷的修改是立时生效的
+对卷的修改不会对更新镜像产生影响
+卷会一直存在直到没有任何容器再使用它
+测试容器和内部的应用程序代码、管理日志、处理容器内部的数据库。
+VOLUME ["/opt/project"]
+VOLUME ["/opt/project", "/data"]
+7.ADD 将构建环境下的文件和目录复制到镜像中
+ADD software.lic /opt/application/software.lic 
+ps: 通过目的地址参数末尾的字符来判断文件源是目录还是文件。
+ADD http://wordpress.org/latest.zip /root/wordpress.zip 
+ps: 如果将一个归档文件（gzip、bzip2、xz）指定为源文件，Docker 自动解开(unpack)
+ADD latest.tar.gz /var/www/wordpress/
+ps: 将 .gz 解压到 目录下,如果已存在，不会被覆盖。
+	如果目的位置不存在，Docker会创建这个全路径，包括子路径。 新模式为0755.并且UID和GID 都是0.
+PS:ADD 会使得构建缓存变得无效， 通过ADD 添加文件或目录，那么这将使得Dockerfile中的后续指令都不能继续使用之前的构建缓存。
+8.COPY 仅做文件提取(extraction)和解压(decompression)的工作。
+COPY conf.d/ /etc/apache2/
+9. ONBUILD  为镜像添加触发器(rigger)。 当一个镜像被作为其他镜像的基础镜像时，该镜像中的触发器将会被执行
+egg: ONBUILD ADD . /app/src 
+	 ONBUILD RUN cd /app/src && make 
+	 
+查看ON BUILD  docker inspect 508efa4e4bf8 
+
+构建全新的Dockerfile, 该镜像名为 jamtur01/apache2 
+FROM ubuntu:14.04
+MAINTAINER James Turnbull "james@example.com"
+RUN apt-get update 
+RUN apt-get install -y apache2 
+ENV APACHE_RUN_USER www-data 
+ENV APACHE_RUN_GROUP www-data 
+ENV APACHE_LOG_DIR /var/log/apache2 
+ONBUILD ADD . /var/www/
+EXPOSE 80
+ENTRYPOINT ["/usr/sbin/apache2"]
+CMD ["-D", "FOREGROUND"]
+构建该镜像， docker build -t="jamtur01/apache2" .
+
+使用镜像模板功能
+FROM jamtur01/apache2 
+MAINTAINER James Turnbull "james@example.com"
+ENV APPLICATION_NAME webapp 
+ENV ENVIRONMENT development
+
+docker  build -t="jamtur01/webapp" . 
+
+将镜像推送到Docker Hub 
+docker push 
+docker push static_web 
+
+删除镜像
+docker rmi jamtur01/static_web 
+
+运行自己的Docker Registry 
+从容器运行Registry
+docker run -p 5000:5000 registry 
+测试新的Registry
+docker image jamtur01/static_web 
+
+docker tag 22d47c8cb6e5 docker.example.com:5000/jamtur01/static_web 
+
+docker push docker.example.com:5000/jamtr01/static_web 
+
+docker run -it docker.example.com:5000/jamtur01/static_web /bin/bash 
+
+其他可选Registry服务 Quay  被CoreOS 收购了
