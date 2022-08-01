@@ -1,0 +1,57 @@
+构建jenkins 和docker服务器
+#Dockerfile
+FROM ubuntu:14.04
+MAINTAINER james@example.com
+ENV REFRESHED_AT 2014-06-01
+RUN apt-get update -qq && apt-get install -qqy curl
+RUN curl https://get.docker.io/gpg | apt-key add - 
+RUN echo deb http://get.docker.io/ubuntu docker main > /etc/apt/sources.list.d/docker.list
+RUN apt-get update -qq & apt-get install -qqy iptables ca-certificates lxc openjdk-6-jdk git-core lxc-docker 
+ENV JENKINS_HOME /opt/jenkins/data
+ENV JENKINS_MIRROR http://mirrors.jennkins-ci.org 
+RUN mkdir -p $JENKINS_HOME/plugins
+RUN curl -sf -o /opt/jenkins/jenkins.war -L $JENKINS_MIRROR/war-stable/latest/jenkins.war 
+RUN for plugin in chucknorris greenballs scm-api git-client git ws-cleanup; do curl -sf -o $JENKINS_HOME/plugins/${plugin}.hpi -L $JENKINS_MIRROR/plugins/${plugin}/latest/${plugin}.hpi ; done 
+
+ADD ./dockerjenkins.sh /usr/local/bin/dockerjenkins.sh
+RUN chmod +x /usr/local/bin/dockerjenkins.sh 
+VOLUME /var/lib/docker 
+EXPOSE 8080
+ENTRYPOINT [ "/usr/local/bin/dockerjenkins.sh" ]
+-----------
+docker build -t jamtur01/dockerjenkins . 
+docker run -p 8080:8080 --name jenkins --privileged -d jamtur01/dockerjenkins 
+ps: privileged 启动Docker的特权模式，允许以其宿主机具有的(几乎)所有能力来运行容器
+
+查看启动日志
+docker logs jenkins 
+
+#用于jenkins作业的Docker shell 脚本 
+#构建用于此作业的镜像
+IMAGE=$(docker build . | tail -l | awk '{ print $NF}')
+#构建挂载到Docker的目录
+MNT="$WORKSPACE/.."
+
+#在Docker里执行编译测试
+CONTAINER=$(docker run -d -v "$MNT:/opt/project" $IMAGE /bin/bash -c 'cd /opt/project/workspace && rake spec')
+
+#进入容器，这样可以看到输出的内容
+docker attach $CONTAINER 
+
+#等待程序退出，得到返回码
+RC=$(docker wait $CONTAINER)
+
+#删除刚刚用到的容器
+docker rm $CONTAINER 
+
+#使用刚才的返回码退出整个脚本
+exit $RC 
+----------------------
+#用户测试的Dockerfile
+FROM ubuntu:14.04
+MAINTAINER James Turnbull "james@example.com"
+ENV REFRESHED_AT 2014-06-01
+RUN apt-get update 
+RUN apt-get -y install ruby rake 
+RUN gem install --no-rdoc --no-ri rspec ci_reporter_rspec 
+
