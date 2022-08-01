@@ -1,0 +1,51 @@
+Docker 构建并测试Web应用程序
+
+1.构建Sinatra应用程序
+#Dockerfile
+FROM ubuntu:14.04
+MAINTAINER James Turnbull james@example.com
+ENV REFRESHED_AT 2014-06-01
+RUN apt-get update
+RUN apt-get -y install ruby ruby-dev build-essential redis-tools
+
+RUN mkdir -p /opt/webapp
+
+EXPOSE 4567
+
+CMD [ "/opt/webapp/bin/webapp" ]
+
+
+---------
+docker build -t jamtur01/sinatra . 
+2.创建Sinatra容器
+wget --cut-dirs=3 -nH -r --no-parent http://dockerbook.com/code/5/sinatra/webapp 
+
+ls -l webapp 
+chmod +x $PWD/webapp/bin/webapp 
+docker run -d -p 4567 --name webapp -v $PWD/webapp:/opt/webapp jamtur01/sinatra
+
+docker logs webapp 
+docker logs -f webapp 
+docker top webapp 
+docker port webapp 4567
+
+curl -i -H 'Accept: application/json' -d 'name=Foo&status=Bar' http://localhost:49160/json 
+
+3. 构建Redis镜像和容器
+#Dockerfile 
+FROM ubuntu:14.04
+MAINTAINER James Turnbull james@example.com
+ENV REFRESHED_AT 2014-06-01
+RUN apt-get update 
+RUN apt-get -y install redis-server redis-tools 
+EXPOSE 6379
+ENTRYPOINT ["/usr/bin/redis-server"]
+CMD []
+------------
+docker build -t jamtur01/redis .
+docker run -d -p 6379 --name redis jamtur01/redis 
+docker port redis 6379
+apt-get -y install redis-tools 
+redis-cli -h 127.0.0.1 -p 49161
+
+4. 连接到Redis容器
